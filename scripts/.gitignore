@@ -1,0 +1,13 @@
+# SSH private keys
+*.pem
+*.key
+
+# Local credentials and secrets
+.env
+.env.*
+!.env.example
+.aws/
+
+# Editor and Mac files
+.vscode/
+.DS_Store
