@@ -1,0 +1,271 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+ #VPC 
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: instancevpc
+
+# Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.10.0/24
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.20.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.30.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet
+
+#IGW
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW
+  
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref IGW
+  
+  #NAT
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      Tags:
+        - Key: Name
+          Value: EIP
+  
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: IGWAttachment
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      AllocationId: !GetAtt EIP.AllocationId
+      Tags:
+       - Key: Name
+         Value: NATGateway
+      
+#PublicRouteTable
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+     VpcId: !Ref VPC
+     Tags:
+      - Key: Name
+        Value: PublicRouteTable
+  
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+  
+  PublicRouteAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     RouteTableId: !Ref PublicRouteTable
+     SubnetId: !Ref PublicSubnet1
+
+  PublicRouteAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+ 
+ #PrivateRoute
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+     VpcId: !Ref VPC
+     Tags:
+      - Key: Name
+        Value: PrivateRouteTable
+
+  PrivateRoute:
+    Type: AWS::EC2::Route 
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+      
+  PrivateRouteRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     RouteTableId: !Ref PrivateRouteTable
+     SubnetId: !Ref PrivateSubnet 
+
+#SecurityGroup 
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: security group for ALB 
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: bastion security group for ssh to EC2
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: 22
+         ToPort: 22
+         CidrIp: 0.0.0.0/0 #add public ip for specifi org
+        
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+     GroupDescription: EC2 security group from alb to port 22
+     VpcId: !Ref VPC
+     SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: 80
+         ToPort: 80
+         SourceSecurityGroupId: !Ref ALBSecurityGroup
+      
+       - IpProtocol: tcp
+         FromPort: 22
+         ToPort: 22
+         SourceSecurityGroupId: !Ref BastionSecurityGroup
+        
+
+
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d27e0fb3bac4d724
+      InstanceType: t2.micro
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: EC2Instance
+
+
+  BastionKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+     KeyName: cloud-lab-key       
+
+  EC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d27e0fb3bac4d724
+      InstanceType: t2.micro
+      SubnetId: !Ref PublicSubnet1
+      KeyName: !Ref BastionKeyPair
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: BastionInstance
+ 
+ 
+  ApplicationLoadbalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: IGWAttachment
+    Properties:
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Type: application
+      Name: alb
+      Scheme: internet-facing
+      Tags:
+       - Key: Name
+         Value: ApplicationLoadbalancer
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      Targets:
+        - Id: !Ref EC2Instance1
+
+    
+  
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+     LoadBalancerArn: !Ref ApplicationLoadbalancer
+     Port: 80
+     Protocol: HTTP
+     DefaultActions:
+       - Type: forward
+         TargetGroupArn: !Ref TargetGroup
+     Tags:
+       - Key: Name
+         Value: ALBListener
+
+  
+       
+
+
+  
+
+
+    
+    
+       
+
+
+
+          
+           
+
+
+
+
+  
+        

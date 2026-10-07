@@ -1,0 +1,15 @@
+# AWS CloudFormation — EC2, ALB & Bastion
+
+This project deploys a secure AWS network and EC2 environment using CloudFormation. The application EC2 instance is placed in a private subnet and receives web traffic through a public Application Load Balancer. A bastion host provides controlled SSH access to the private instance.
+
+## Resources
+
+- **VPC** — Provides an isolated network for the environment.
+- **Public Subnets** — Host internet-facing resources such as the ALB and bastion host.
+- **Private Subnet** — Hosts the application EC2 instance without direct internet exposure.
+- **Internet Gateway** — Provides internet connectivity for public resources.
+- **NAT Gateway** — Allows the private EC2 instance to reach the internet without being publicly accessible.
+- **Application Load Balancer** — Receives HTTP traffic and forwards it to the private EC2 instance.
+- **Bastion Host** — Provides SSH access to the private EC2 instance.
+- **Security Groups** — Restrict HTTP and SSH traffic between resources.
+- **EC2 Key Pair** — Provides SSH authentication.
