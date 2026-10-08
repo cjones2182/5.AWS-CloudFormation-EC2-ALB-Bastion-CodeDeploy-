@@ -188,10 +188,12 @@ Resources:
           #!/bin/bash
           dnf update -y
           dnf install wget -y
+          sudo dnf install -y ruby
           cd /tmp
           wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
           chmod +x install
           ./install auto
+          sleep 40
           systemctl enable --now codedeploy-agent
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
