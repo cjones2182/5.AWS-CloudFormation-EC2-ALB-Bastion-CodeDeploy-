@@ -181,6 +181,16 @@ Resources:
       ImageId: ami-0d27e0fb3bac4d724
       InstanceType: t2.micro
       SubnetId: !Ref PrivateSubnet
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf update -y
+          dnf install wget
+          wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
+           chmod +x install
+          ./install auto
+          systemctl enable --now codedeploy-agent
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       Tags:
@@ -248,9 +258,37 @@ Resources:
        - Key: Name
          Value: ALBListener
 
-  
-       
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
 
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+     Roles:
+      - !Ref EC2Role
 
   
 
