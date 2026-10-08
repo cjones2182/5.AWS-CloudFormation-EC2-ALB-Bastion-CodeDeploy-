@@ -187,9 +187,10 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           dnf update -y
-          dnf install wget
+          dnf install wget -y
+          cd /tmp
           wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
-           chmod +x install
+          chmod +x install
           ./install auto
           systemctl enable --now codedeploy-agent
       SecurityGroupIds:
